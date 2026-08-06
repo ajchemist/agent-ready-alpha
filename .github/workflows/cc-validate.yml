@@ -1,0 +1,71 @@
+name: cc-validate
+
+on:
+  push:
+    branches: [cc]
+  pull_request:
+    branches: [cc]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate cc scaffold contents
+        id: validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          commit_sha="${{ github.sha }}"
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            commit_sha="${{ github.event.pull_request.head.sha }}"
+          fi
+          git ls-tree -r --name-only "$commit_sha" > /tmp/cc-files.txt
+          python3 - <<'PY'
+          import sys
+          from pathlib import Path
+          allowed_prefixes = ('.claude/', '.scaffold/', '.gitignore')
+          forbidden = []
+          for line in Path('/tmp/cc-files.txt').read_text().splitlines():
+              if line == '.gitignore':
+                  continue
+              if line.startswith(allowed_prefixes):
+                  continue
+              forbidden.append(line)
+          if forbidden:
+              print('Forbidden files detected:')
+              for item in forbidden:
+                  print(f' - {item}')
+              raise SystemExit(1)
+          print('cc scaffold validation passed')
+          PY
+
+      - name: Create issue for invalid scaffold changes
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const title = `cc branch validation failed for ${context.sha}`;
+            const body = [
+              'The cc validation workflow detected files outside the approved scaffold allow-list.',
+              '',
+              `- Commit: ${context.sha}`,
+              `- Ref: ${context.ref}`,
+              `- Workflow: ${context.workflow}`
+            ].join('\n');
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+              labels: ['cc-validation']
+            });
