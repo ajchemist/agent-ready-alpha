@@ -1,0 +1,5 @@
+# Ignore common OS files and node modules
+.DS_Store
+.vscode/
+node_modules/
+.venv/
