@@ -1,0 +1,28 @@
+name: kimi-maintenance
+
+on:
+  schedule:
+    - cron: '30 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  maintain-kimi:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Make the generator executable
+        run: chmod +x .github/scripts/create-kimi-branch.sh
+
+      - name: Create or update the kimi branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: .github/scripts/create-kimi-branch.sh
