@@ -29,6 +29,8 @@ cp "$scaffold_src/AGENTS.md" "$scaffold_src/CLAUDE.md" "$scaffold_src/README.md"
 cp "$scaffold_src/dot.gitignore" "$project_dir/.gitignore"
 cp "$scaffold_src"/docs/agents/*.md "$project_dir/docs/agents/"
 cp "$scaffold_src/AGENT-SETUP.md" "$scaffold_src/verify.sh" "$project_dir/.scaffold/"
+cp "$scaffold_src/setup-wizard.sh" "$project_dir/setup-wizard.sh"
+chmod +x "$project_dir/setup-wizard.sh"
 
 # --- Provenance guard --------------------------------------------------------
 # The scaffold output must carry no reference to its source repository or its

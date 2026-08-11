@@ -9,8 +9,7 @@
 ```bash
 bunx degit ajchemist/agent-ready-alpha#core my-new-project
 cd my-new-project
-claude -p --permission-mode bypassPermissions \
-  "Read ./.scaffold/AGENT-SETUP.md and execute every step in it, in order. You are non-interactive: never ask a question, use the documented defaults."
+bash ./setup-wizard.sh
 ```
 
 degit 한 번 + 에이전트 호출 한 번으로 셋업이 끝납니다. 부트스트랩은:

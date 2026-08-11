@@ -5,30 +5,23 @@ yet** — a coding agent completes the setup in one run.
 
 ## Onboarding
 
-From the project root, run your coding agent once against the bootstrap
-instructions:
+From the project root, run the interactive wizard:
 
 ```bash
-claude -p --permission-mode bypassPermissions \
-  "Read ./.scaffold/AGENT-SETUP.md and execute every step in it, in order. You are non-interactive: never ask a question, use the documented defaults."
+bash ./setup-wizard.sh
 ```
 
-`bypassPermissions` is required in print mode: the bootstrap runs shell
-commands (`bd`, `claude plugin`, `git`), and stricter modes deny them with no
-way to approve. This directory is freshly created, so the blast radius is the
-scaffold itself.
-
-Any agent that can read files and run shell commands works — point it at
-`.scaffold/AGENT-SETUP.md`.
-
-The bootstrap will:
+The wizard performs the mechanical steps itself and only hands the generative
+rest to a coding agent — it will:
 
 - verify the scaffold's integrity against its manifest
+- detect which agent CLIs are installed and logged in, and let you pick one
+- initialize git and the beads (`bd`) issue tracker
 - install the project's agent skills as project-scoped Claude plugins
-- initialize the beads (`bd`) issue tracker
 - record the bootstrap decision as an ADR bead
-- replace this README with your project's real README
-- remove `.scaffold/`
+- invoke your chosen agent to replace this README with the project's real one
+  (its instructions live in `.scaffold/AGENT-SETUP.md`)
+- remove the scaffold kit (`.scaffold/` and the wizard itself)
 
 ## Requirements
 

@@ -8,8 +8,7 @@
 ```bash
 bunx degit ajchemist/agent-ready-alpha#core my-new-project
 cd my-new-project
-claude -p --permission-mode bypassPermissions \
-  "Read ./.scaffold/AGENT-SETUP.md and execute every step in it, in order. You are non-interactive: never ask a question, use the documented defaults."
+bash ./setup-wizard.sh
 ```
 
 Claude Code가 아니어도 됩니다 — 파일을 읽고 셸을 실행할 수 있는 에이전트라면
@@ -27,11 +26,12 @@ Claude Code가 아니어도 됩니다 — 파일을 읽고 셸을 실행할 수 
 AGENTS.md                        단일 지침 파일 (CLAUDE.md는 "@AGENTS.md" 한 줄)
 CLAUDE.md
 README.md                        온보딩 안내 — 부트스트랩이 실제 프로젝트 README로 교체
+setup-wizard.sh                  대화형 부트스트랩 위저드 (기계적 단계 전부 수행)
 .gitignore
 docs/agents/issue-tracker.md     beads 워크플로 명세
 docs/agents/triage-labels.md     기본 5종 트리아지 라벨
 docs/agents/domain.md            single-context + ADR은 beads decision 비드
-.scaffold/AGENT-SETUP.md         부트스트랩 지침서 (에이전트 최적화 형식)
+.scaffold/AGENT-SETUP.md         에이전트 몫 작업만 (README 재작성 등)
 .scaffold/manifest.json          전체 파일 sha256 해시
 .scaffold/verify.sh              manifest 자체 검증
 ```
