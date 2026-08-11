@@ -44,6 +44,24 @@ jobs:
           print("core scaffold validation passed")
           PY
 
+      - name: Verify no provenance keywords
+        shell: bash
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          terms=("${REPO%%/*}" "${REPO##*/}")
+          leak=0
+          for term in "${terms[@]}"; do
+            if [[ "${#term}" -lt 4 ]]; then continue; fi
+            if git grep -riF -- "$term" -- .; then
+              echo "provenance leak: '$term' present on the core branch" >&2
+              leak=1
+            fi
+          done
+          if [[ "$leak" -ne 0 ]]; then exit 1; fi
+          echo "provenance check passed: 0 occurrences"
+
       - name: Create issue for invalid scaffold changes
         if: failure()
         uses: actions/github-script@v7

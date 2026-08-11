@@ -21,6 +21,9 @@
    영향을 주므로 반드시 `dot.gitignore`로 두고, 생성기가 복사하며 이름을
    바꿉니다.
 3. 생성된 트리에 소스 저장소에 대한 참조(provenance)가 남아 있을 때.
+   키워드(owner, repo-name, actor)는 `GITHUB_REPOSITORY`/`GITHUB_ACTOR`/origin
+   remote에서 동적으로 유도되므로 포크에서도 자동으로 검사됩니다. 같은 검사가
+   `core-validate`에도 있어 core 브랜치에 직접 push된 커밋도 걸러냅니다.
 
 ## 로컬 드라이런
 

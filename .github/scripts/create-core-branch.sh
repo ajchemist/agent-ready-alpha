@@ -31,13 +31,45 @@ cp "$scaffold_src"/docs/agents/*.md "$project_dir/docs/agents/"
 cp "$scaffold_src/AGENT-SETUP.md" "$scaffold_src/verify.sh" "$project_dir/.scaffold/"
 
 # --- Provenance guard --------------------------------------------------------
-# The scaffold output must carry no reference to its source repository
-# (decision bead agent-ready-alpha-o32).
+# The scaffold output must carry no reference to its source repository or its
+# owner (decision bead agent-ready-alpha-o32). Keywords are derived from the
+# environment, so forks are covered without editing this script.
 
-if grep -rilE 'ajchemist|agent-ready-alpha' "$project_dir"; then
-  echo "provenance leak: the scaffold output must not reference its source repository" >&2
+provenance_terms=()
+if [[ -n "${GITHUB_REPOSITORY:-}" ]]; then
+  provenance_terms+=("${GITHUB_REPOSITORY%%/*}" "${GITHUB_REPOSITORY##*/}")
+fi
+if [[ -n "${GITHUB_ACTOR:-}" ]]; then
+  provenance_terms+=("$GITHUB_ACTOR")
+fi
+origin_url="$(git -C "$workspace_dir" remote get-url origin 2>/dev/null || true)"
+if [[ -n "$origin_url" ]]; then
+  while IFS= read -r part; do
+    provenance_terms+=("$part")
+  done < <(printf '%s\n' "$origin_url" | sed -E 's#\.git$##; s#^.*[:/]([^/]+)/([^/]+)$#\1\n\2#')
+fi
+
+leak=0
+checked=()
+for term in "${provenance_terms[@]}"; do
+  if [[ "${#term}" -lt 4 ]]; then
+    continue  # too short — would false-positive on ordinary words
+  fi
+  case " ${checked[*]-} " in *" $term "*) continue ;; esac
+  checked+=("$term")
+  if grep -riF -- "$term" "$project_dir"; then
+    echo "provenance leak: '$term' found in the scaffold output" >&2
+    leak=1
+  fi
+done
+if [[ "${#checked[@]}" -eq 0 ]]; then
+  echo "provenance guard: no keywords derivable (need GITHUB_REPOSITORY or an origin remote)" >&2
   exit 1
 fi
+if [[ "$leak" -ne 0 ]]; then
+  exit 1
+fi
+echo "provenance check: 0 occurrences of: ${checked[*]}"
 
 # --- Manifest ----------------------------------------------------------------
 
