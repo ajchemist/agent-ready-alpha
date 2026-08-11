@@ -1,0 +1,66 @@
+name: core-validate
+
+on:
+  push:
+    branches: [core]
+  pull_request:
+    branches: [core]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify manifest hashes
+        run: bash .scaffold/verify.sh .
+
+      - name: Verify the tree matches the manifest exactly
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import subprocess
+          tracked = set(subprocess.check_output(["git", "ls-files"], text=True).splitlines())
+          with open(".scaffold/manifest.json", encoding="utf-8") as handle:
+              manifest = json.load(handle)
+          expected = set(manifest["files"]) | {".scaffold/manifest.json"}
+          extra = sorted(tracked - expected)
+          missing = sorted(expected - tracked)
+          for item in extra:
+              print(f"unexpected file: {item}")
+          for item in missing:
+              print(f"missing file: {item}")
+          if extra or missing:
+              raise SystemExit(1)
+          print("core scaffold validation passed")
+          PY
+
+      - name: Create issue for invalid scaffold changes
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = `core branch validation failed for ${context.sha}`;
+            const body = [
+              'The core validation workflow detected a tree that does not match the scaffold manifest.',
+              '',
+              `- Commit: ${context.sha}`,
+              `- Ref: ${context.ref}`,
+              `- Workflow: ${context.workflow}`
+            ].join('\n');
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+              labels: ['core-validation']
+            });

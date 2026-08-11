@@ -1,56 +1,43 @@
 # agent-ready-alpha
 
-이 저장소는 두 가지를 관리합니다.
+에이전트 무관(agent-agnostic) 프로젝트 스캐폴드를 관리하는 저장소입니다.
+`core` 브랜치가 스캐폴드 본체이고, `main`은 그것을 생성·검증하는
+페이로드(`scaffold/`)와 워크플로를 담습니다.
 
-1. 프로젝트 범위로 Claude 플러그인을 설치하는 로컬 스크립트
-2. `cc` 브랜치의 최소 스캐폴드로, 새 프로젝트를 빠르게 시작할 수 있는 온보딩 경로
-
-## 로컬 설치(개발용)
-
-사용자 환경에서 프로젝트 스코프의 Claude 플러그인을 설치하려면 아래 스크립트를 실행하세요.
-
-주의: `claude` CLI가 설치되어 있고 인증(로그인/토큰)이 필요할 수 있습니다. Codespace나 로컬에서 실행하세요.
+## core 스캐폴드로 새 프로젝트 시작하기
 
 ```bash
-# 실행 권한을 추가하고 스크립트 실행
-chmod +x scripts/install-claude-plugins.sh
-./scripts/install-claude-plugins.sh
-```
-
-## cc 스캐폴드로 새 프로젝트 시작하기
-
-`cc` 브랜치는 개발용 파일이나 저장소 전용 문서 없이, 최소한의 스캐폴드만 제공하도록 설계되었습니다. 그래서 `degit`으로 아주 깔끔하게 가져와서 바로 시작할 수 있습니다.
-
-```bash
-bunx degit ajchemist/agent-ready-alpha#cc my-new-project
+bunx degit ajchemist/agent-ready-alpha#core my-new-project
 cd my-new-project
-ls -la
+claude -p --permission-mode bypassPermissions \
+  "Read ./.scaffold/AGENT-SETUP.md and execute every step in it, in order. You are non-interactive: never ask a question, use the documented defaults."
 ```
 
-이 명령으로 받게 되는 기본 파일은 다음과 같습니다.
+degit 한 번 + 에이전트 호출 한 번으로 셋업이 끝납니다. 부트스트랩은:
 
-- `.claude/installed.json`
-- `.gitignore`
-- `.scaffold/manifest.json`
+- manifest 기준으로 스캐폴드 무결성을 검증하고
+- 에이전트 스킬(`mattpocock-skills`, `ponytail`)을 프로젝트 스코프 Claude
+  플러그인으로 설치하고
+- beads(`bd`) 이슈 트래커를 초기화하고
+- 부트스트랩 결정을 ADR 비드로 기록하고
+- README를 실제 프로젝트 README로 교체하고
+- `.scaffold/`를 삭제합니다.
 
-이 브랜치는 온보딩과 검증을 위한 최소한의 기준이며, README나 `.github`, `scripts/` 같은 저장소 전용 개발 파일은 포함하지 않습니다.
+자세한 설명은 [docs/core-scaffold.md](docs/core-scaffold.md),
+워크플로 운영은 [docs/core-workflow-guidance.md](docs/core-workflow-guidance.md)를
+참고하세요.
 
-자세한 설명은 [docs/cc-scaffold.md](docs/cc-scaffold.md)를 참고하세요.
-
-## kimi 스캐폴드로 새 프로젝트 시작하기
-
-`kimi` 브랜치는 Kimi CLI용 스캐폴드입니다. Kimi CLI는 마켓플레이스가 없어서, 플러그인 참조 대신 skill 파일 자체를 `.agents/skills/`에 vendoring해 둡니다(Kimi CLI가 읽는 프로젝트 스코프 경로).
+## 검증
 
 ```bash
-bunx degit ajchemist/agent-ready-alpha#kimi my-new-project
-cd my-new-project
+bash verify_scaffold.sh <project-dir>
 ```
 
-이 명령으로 받게 되는 기본 파일은 다음과 같습니다.
+스캐폴드가 자체적으로 들고 있는 `.scaffold/verify.sh`로 위임합니다.
 
-- `.agents/skills/` — [mattpocock/skills](https://github.com/mattpocock/skills)(Claude 플러그인이 설치하는 skill 목록과 동일), [ponytail](https://github.com/DietrichGebert/ponytail), [caveman](https://github.com/JuliusBrussee/caveman)에서 가져온 skill 전체
-- `.kimi/installed.json` — 설치 마커와 세 저장소의 pinned commit SHA
-- `.gitignore`
-- `.scaffold/manifest.json`
+## 레거시 브랜치
 
-브랜치는 `kimi-maintenance` 워크플로우(daily cron + 수동 실행)가 upstream 최신 기준으로 재생성합니다. 검증은 cc와 동일하게 `bash verify_scaffold.sh .` 를 사용합니다.
+`cc`(Claude Code 전용 최소 스캐폴드)와 `kimi`(Kimi CLI용 skill 벤더링
+스캐폴드) 브랜치는 core가 안정화될 때까지 유지됩니다. core가 세 에이전트를
+모두 커버하므로 이후 정리 예정입니다. 문서:
+[docs/cc-scaffold.md](docs/cc-scaffold.md)
