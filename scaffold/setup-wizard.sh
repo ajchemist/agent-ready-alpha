@@ -192,7 +192,20 @@ fi
 
 TOTAL_STAGES=7
 
-banner "Project bootstrap"
+# Custom opening frame — this wizard runs shell steps in place, not a browser
+# journey, so it replaces the library's generic banner() copy.
+_clear
+printf '\n%s%s  Project bootstrap%s\n' "$BOLD" "$BLUE" "$RESET"
+printf '%s  %s stages%s\n\n' "$DIM" "$TOTAL_STAGES" "$RESET"
+say "This wizard bootstraps the project right here:"
+step "verify the scaffold, then init git + the beads (bd) issue tracker"
+step "install the agent skills as project-scoped Claude plugins"
+step "record the bootstrap decision as an ADR bead"
+step "hand the README rewrite to your coding agent"
+step "finally the scaffold kit (.scaffold/ and this wizard) removes itself"
+printf '\n'
+note "Every step is idempotent — stop any time with Ctrl-C and re-run later."
+pause "Ready to start?"
 
 # ── Stage 1 ───────────────────────────────────────────────────────────────
 stage "Preflight — tools and scaffold integrity"
@@ -337,3 +350,9 @@ fi
 # ──────────────────────────────────────────────────────────────────────────
 
 finish
+printf '  %sNext%s: start your coding agent in this project and run\n' "$BOLD" "$RESET"
+printf '  %s/mattpocock-skills:setup-matt-pocock-skills%s to finalize the skills\n' "$BLUE" "$RESET"
+say "configuration. The answers are pre-baked in docs/agents/ (beads tracker,"
+say "default triage labels, single-context + ADRs in beads) — accept the"
+say "defaults, or adjust those files first."
+printf '\n'
