@@ -1,0 +1,54 @@
+name: core-maintenance
+
+on:
+  schedule:
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  maintain-core:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Make the generator executable
+        run: chmod +x .github/scripts/create-core-branch.sh
+
+      - name: Create or update the core branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          OMNIROUTE_URL: ${{ vars.OMNIROUTE_URL }}
+        run: .github/scripts/create-core-branch.sh
+
+      - name: Create audit issue
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const commitSha = fs.existsSync('core_commit_sha') ? fs.readFileSync('core_commit_sha', 'utf8').trim() : 'unknown';
+            const title = `core maintenance audit ${new Date().toISOString()}`;
+            const body = [
+              'core branch maintenance run completed.',
+              '',
+              `- Commit SHA: ${commitSha}`,
+              `- Workflow: ${context.workflow}`,
+              `- Run URL: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            ].join('\n');
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+              labels: ['core-maintenance']
+            });
