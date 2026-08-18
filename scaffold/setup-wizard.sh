@@ -247,6 +247,14 @@ if command -v codex >/dev/null 2>&1; then
     warn "codex — installed but not logged in (run 'codex login')"
   fi
 fi
+if command -v pi >/dev/null 2>&1; then
+  step "pi — installed (uses whichever provider you've configured)"
+  [[ -z "$default_cli" ]] && default_cli="pi"
+fi
+if command -v opencode >/dev/null 2>&1; then
+  step "opencode — installed (login state unknown)"
+  [[ -z "$default_cli" ]] && default_cli="opencode"
+fi
 if command -v kimi >/dev/null 2>&1; then
   step "kimi — installed (login state unknown)"
   [[ -z "$default_cli" ]] && default_cli="kimi"
@@ -256,10 +264,28 @@ if [[ -z "$default_cli" ]]; then
   warn "leave the README rewrite for you (or an agent) to do later."
   default_cli="none"
 fi
-AGENT_CLI=""
-ask AGENT_CLI "Agent to finish the setup [${default_cli}]:"
-[[ -z "$AGENT_CLI" ]] && AGENT_CLI="$default_cli"
-note "using: $AGENT_CLI"
+# select_agent — prompt until AGENT_CLI is an installed, driveable CLI or the
+# explicit choice "none". Stage 6 re-invokes this after a failed agent run.
+select_agent() {
+  while :; do
+    AGENT_CLI=""
+    ask AGENT_CLI "Agent to finish the setup (claude/codex/pi/opencode/kimi/none) [${default_cli}]:"
+    [[ -z "$AGENT_CLI" ]] && AGENT_CLI="$default_cli"
+    case "$AGENT_CLI" in
+      none) break ;;
+      claude|codex|pi|opencode|kimi)
+        if command -v "$AGENT_CLI" >/dev/null 2>&1; then break; fi
+        warn "'$AGENT_CLI' is not on PATH — install it, or pick another agent"
+        ;;
+      *)
+        warn "'$AGENT_CLI' is not an agent this wizard can drive — choose one of:"
+        warn "claude, codex, pi, opencode, kimi, or none"
+        ;;
+    esac
+  done
+  note "using: $AGENT_CLI"
+}
+select_agent
 
 # ── Stage 3 ───────────────────────────────────────────────────────────────
 stage "Git and beads issue tracker"
@@ -311,36 +337,81 @@ fi
 
 # ── Stage 6 ───────────────────────────────────────────────────────────────
 stage "Let the agent finish — rewrite README.md"
-agent_prompt="Read ./.scaffold/AGENT-SETUP.md and complete the agent tasks in it. You are non-interactive: never ask a question, use the documented defaults."
-case "$AGENT_CLI" in
-  claude)
-    say "Running claude (file edits only, so acceptEdits is enough)…"
-    claude -p --permission-mode acceptEdits "$agent_prompt" </dev/null || {
-      SKIPPED+=("README rewrite — claude run failed; re-run: claude -p --permission-mode acceptEdits \"$agent_prompt\"")
-      warn "claude run failed — you can re-run it later"
-    }
-    ;;
-  codex)
-    say "Running codex…"
-    codex exec --full-auto "$agent_prompt" </dev/null || {
-      SKIPPED+=("README rewrite — codex run failed; re-run: codex exec --full-auto \"$agent_prompt\"")
-      warn "codex run failed — you can re-run it later"
-    }
-    ;;
-  kimi)
-    SKIPPED+=("README rewrite — run kimi yourself with: \"$agent_prompt\"")
-    warn "kimi invocation is not automated — run it with the prompt above"
-    ;;
-  *)
-    SKIPPED+=("README rewrite — replace the onboarding README with your project's real README")
-    note "skipping the agent step"
-    ;;
-esac
+agent_prompt="Read ./.scaffold/AGENT-SETUP.md and complete the agent tasks in it. You are non-interactive: never ask a question, use the documented defaults. End with the checklist report AGENT-SETUP.md asks for."
+
+# run_agent CLI — invoke CLI on $agent_prompt in its documented headless mode.
+run_agent() {
+  case "$1" in
+    claude)   claude -p --permission-mode acceptEdits "$agent_prompt" </dev/null ;;
+    codex)    codex exec --full-auto "$agent_prompt" </dev/null ;;
+    pi)       pi -p "$agent_prompt" </dev/null ;;
+    opencode) opencode run "$agent_prompt" </dev/null ;;
+    kimi)     kimi --print -p "$agent_prompt" </dev/null ;;
+    *)        return 127 ;;
+  esac
+}
+
+# readme_rewritten — the hard completion check from AGENT-SETUP.md: the
+# onboarding README counts as rewritten once it no longer mentions this wizard.
+readme_rewritten() {
+  [[ -f README.md ]] && ! grep -q "setup-wizard.sh" README.md
+}
+
+# The agent's exit status alone is not trusted: a run only passes when the
+# README check confirms the work. Anything else loops back to agent selection
+# or is recorded loudly as not done — never skipped silently.
+if readme_rewritten; then
+  note "README.md already rewritten — nothing for the agent to do"
+else
+  agent_log="$(mktemp)"
+  while :; do
+    if [[ "$AGENT_CLI" == "none" ]]; then
+      warn "No agent selected — README.md is still the scaffold onboarding page."
+      if confirm "Really leave the README rewrite undone?"; then
+        SKIPPED+=("README rewrite — NOT done; run an agent on ./.scaffold/AGENT-SETUP.md")
+        warn "README rewrite NOT done — listed under 'still to do by hand'"
+        break
+      fi
+      select_agent
+      continue
+    fi
+    say "Running $AGENT_CLI — output streams below and is verified afterwards…"
+    printf '  %s── %s ──%s\n' "$DIM" "$AGENT_CLI" "$RESET"
+    rc=0
+    run_agent "$AGENT_CLI" 2>&1 | tee "$agent_log" || rc=$?
+    printf '  %s── end of %s output ──%s\n' "$DIM" "$AGENT_CLI" "$RESET"
+    if [[ "$rc" -eq 0 ]] && readme_rewritten; then
+      step "$AGENT_CLI finished — README.md no longer references the scaffold"
+      say "Agent report (tail of its output):"
+      tail -n 10 "$agent_log" | sed 's/^/    /'
+      break
+    fi
+    if [[ "$rc" -ne 0 ]]; then
+      warn "$AGENT_CLI exited with status $rc — the task did not complete"
+    else
+      warn "$AGENT_CLI exited 0, but README.md still mentions setup-wizard.sh —"
+      warn "the rewrite did NOT happen"
+    fi
+    say "Last lines of the agent output:"
+    tail -n 10 "$agent_log" | sed 's/^/    /'
+    if confirm "Retry (pick the same or another agent)?"; then
+      select_agent
+      continue
+    fi
+    SKIPPED+=("README rewrite — FAILED with $AGENT_CLI; re-run the wizard or run an agent on ./.scaffold/AGENT-SETUP.md")
+    warn "README rewrite NOT done — listed under 'still to do by hand'"
+    break
+  done
+fi
 
 # ── Stage 7 ───────────────────────────────────────────────────────────────
 stage "Remove the scaffold kit"
 say "A bootstrapped project keeps no scaffold residue: .scaffold/ and this"
 say "wizard both go away."
+if ! readme_rewritten; then
+  warn "README.md was NOT rewritten — removing .scaffold/ also deletes the"
+  warn "agent instructions (.scaffold/AGENT-SETUP.md). Keep the kit until done."
+fi
 if confirm "Remove .scaffold/ and setup-wizard.sh now?"; then
   rm -rf .scaffold setup-wizard.sh
   step "scaffold kit removed"

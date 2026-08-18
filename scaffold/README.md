@@ -27,4 +27,5 @@ rest to a coding agent — it will:
 
 - `git`, `bash`, `python3`
 - [beads](https://github.com/steveyegge/beads) (`bd`) — issue tracker CLI
-- a coding agent (Claude Code, Codex, …)
+- a coding agent CLI the wizard can drive: `claude`, `codex`, `pi`,
+  `opencode`, or `kimi`
