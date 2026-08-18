@@ -4,7 +4,9 @@
 `core` 브랜치가 스캐폴드 본체이고, `main`은 그것을 생성·검증하는
 페이로드(`scaffold/`)와 워크플로를 담습니다.
 
-## core 스캐폴드로 새 프로젝트 시작하기
+## Usage
+
+대표적인 Claude Code 워크플로우입니다.
 
 ```bash
 bunx degit ajchemist/agent-ready-alpha#core my-new-project
@@ -12,7 +14,18 @@ cd my-new-project
 bash ./setup-wizard.sh
 ```
 
-degit 한 번 + 에이전트 호출 한 번으로 셋업이 끝납니다. 부트스트랩은:
+wizard가 끝나면 프로젝트 스코프 플러그인을 불러올 수 있도록 새 에이전트
+세션을 열고 setup을 마무리합니다.
+
+```bash
+claude
+```
+
+```text
+/mattpocock-skills:setup-matt-pocock-skills
+```
+
+부트스트랩은:
 
 - manifest 기준으로 스캐폴드 무결성을 검증하고
 - 에이전트 스킬(`mattpocock-skills`, `ponytail`)을 프로젝트 스코프 Claude
