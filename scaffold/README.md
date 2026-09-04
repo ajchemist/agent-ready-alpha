@@ -27,5 +27,8 @@ rest to a coding agent — it will:
 
 - `git`, `bash`, `python3`
 - [beads](https://github.com/steveyegge/beads) (`bd`) — issue tracker CLI
-- a coding agent CLI the wizard can drive: `claude`, `codex`, `pi`,
-  `opencode`, or `kimi`
+- a coding agent CLI the wizard can drive, logged in: `claude`, `codex`,
+  `gemini`, `qwen`, `copilot`, `opencode`, `pi`, `omp`, `kimi`, `goose`, `amp`,
+  `droid`, `crush`, `cursor` (the `agent` binary), `kiro-cli`, or `aider`. The
+  wizard runs it headless with tool calls auto-approved, so it needs no
+  further configuration.

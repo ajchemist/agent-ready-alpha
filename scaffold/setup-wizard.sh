@@ -229,39 +229,151 @@ bash .scaffold/verify.sh .
 
 # ── Stage 2 ───────────────────────────────────────────────────────────────
 stage "Pick your coding agent"
+
+# Agent roster — every CLI this wizard can drive, in default-preference order.
+# Names are the binaries, except "cursor" (binary: agent, formerly cursor-agent).
+# agent_status / run_agent below hold the per-CLI knowledge: how to tell whether
+# it is logged in, and its verified headless + auto-approve invocation. Every
+# headless run must auto-approve tool calls — without that, a CLI either hangs
+# on a permission prompt (there is no TTY to answer it) or exits 0 having
+# edited nothing. Flags were checked against these versions:
+#   claude 2.1, codex 0.149, gemini 0.58, qwen 0.23, copilot 1.0, opencode 1.18,
+#   pi 0.84, omp 18.0, kimi 1.50, goose 1.x, amp 2026-09, droid/crush/cursor/
+#   kiro-cli/aider per their current docs.
+AGENT_ROSTER="claude codex gemini qwen copilot opencode pi omp kimi goose amp droid crush cursor kiro-cli aider"
+
+# agent_bin NAME — the executable behind a roster name.
+agent_bin() {
+  case "$1" in
+    cursor) if command -v cursor-agent >/dev/null 2>&1 && ! command -v agent >/dev/null 2>&1; then
+              echo cursor-agent; else echo agent; fi ;;
+    *) echo "$1" ;;
+  esac
+}
+
+# agent_status NAME — sets AGENT_STATE to warm (installed + logged in), cold
+# (installed, definitely not logged in) or unknown (installed; no cheap probe),
+# and AGENT_NOTE to a one-line hint. Probes must be quick and must never start
+# a login flow themselves.
+agent_status() {
+  AGENT_STATE="unknown"; AGENT_NOTE="login state unknown"
+  case "$1" in
+    claude)
+      if claude auth status >/dev/null 2>&1; then AGENT_STATE=warm; AGENT_NOTE="logged in"
+      else AGENT_STATE=cold; AGENT_NOTE="not logged in (run 'claude' once to log in)"; fi ;;
+    codex)
+      if codex login status >/dev/null 2>&1; then AGENT_STATE=warm; AGENT_NOTE="logged in"
+      else AGENT_STATE=cold; AGENT_NOTE="not logged in (run 'codex login')"; fi ;;
+    gemini)
+      if [[ -n "${GEMINI_API_KEY:-}" || -n "${GOOGLE_API_KEY:-}" || -f "$HOME/.gemini/oauth_creds.json" ]]; then
+        AGENT_STATE=warm; AGENT_NOTE="API key or OAuth credentials found"
+      else AGENT_NOTE="no GEMINI_API_KEY and no ~/.gemini/oauth_creds.json (run 'gemini' once to log in)"; fi ;;
+    qwen)
+      if [[ -f "$HOME/.qwen/oauth_creds.json" || -n "${OPENAI_API_KEY:-}" ]]; then
+        AGENT_STATE=warm; AGENT_NOTE="credentials found"
+      else AGENT_NOTE="no ~/.qwen/oauth_creds.json (run 'qwen' once to log in)"; fi ;;
+    copilot)
+      AGENT_NOTE="uses the Copilot login or COPILOT_GITHUB_TOKEN/GH_TOKEN (run 'copilot login' if it fails)" ;;
+    opencode)
+      local creds; creds="$(opencode auth list 2>/dev/null || true)"
+      if [[ -z "$creds" ]]; then AGENT_NOTE="could not query 'opencode auth list'"
+      elif printf '%s' "$creds" | grep -q ' 0 credentials'; then
+        AGENT_STATE=cold; AGENT_NOTE="no stored credentials (run 'opencode auth login'; provider API keys in the env also work)"
+      else AGENT_STATE=warm; AGENT_NOTE="credentials stored"; fi ;;
+    pi|omp)
+      # Print mode exits 0 with "No API key found" when no provider is logged
+      # in — the only reliable probe is the model list (verified for pi; omp
+      # is a pi fork and is assumed to behave the same).
+      local models rc=0; models="$("$1" --list-models 2>&1)" || rc=$?
+      if [[ "$rc" -ne 0 || -z "$models" ]]; then
+        AGENT_NOTE="'$1 --list-models' failed: $(printf '%s' "$models" | head -n1 | cut -c1-60)"
+      elif printf '%s' "$models" | grep -qi 'No models available'; then
+        AGENT_STATE=cold; AGENT_NOTE="no provider logged in (run '$1' and /login)"
+      else AGENT_STATE=warm; AGENT_NOTE="provider configured"; fi ;;
+    kimi)
+      if [[ -n "${KIMI_API_KEY:-}" ]] || [[ -d "$HOME/.kimi/credentials" && -n "$(ls -A "$HOME/.kimi/credentials" 2>/dev/null)" ]]; then
+        AGENT_STATE=warm; AGENT_NOTE="credentials found"
+      else AGENT_NOTE="no KIMI_API_KEY and no ~/.kimi/credentials (run 'kimi login')"; fi ;;
+    goose)
+      if [[ -f "$HOME/.config/goose/config.yaml" ]]; then AGENT_STATE=warm; AGENT_NOTE="provider configured"
+      else AGENT_STATE=cold; AGENT_NOTE="no provider configured (run 'goose configure')"; fi ;;
+    amp)
+      AGENT_NOTE="opens a browser login if no API key is stored (AMP_API_KEY also works)" ;;
+    droid)
+      AGENT_NOTE="uses the droid login or FACTORY_API_KEY" ;;
+    crush)
+      AGENT_NOTE="uses provider API keys from its config or the env" ;;
+    cursor)
+      if "$(agent_bin cursor)" status >/dev/null 2>&1; then AGENT_STATE=warm; AGENT_NOTE="logged in"
+      else AGENT_NOTE="'agent status' did not confirm a login (run 'agent login' or set CURSOR_API_KEY)"; fi ;;
+    kiro-cli)
+      if kiro-cli whoami >/dev/null 2>&1; then AGENT_STATE=warm; AGENT_NOTE="logged in"
+      else AGENT_NOTE="'kiro-cli whoami' did not confirm a login (run 'kiro-cli login')"; fi ;;
+    aider)
+      AGENT_NOTE="uses provider API keys from the env (OPENAI_API_KEY, ANTHROPIC_API_KEY, …)" ;;
+  esac
+}
+
+# run_agent NAME — invoke the CLI on $agent_prompt: headless, one shot, all
+# tool calls auto-approved. stdin is /dev/null so nothing can wait on a TTY.
+run_agent() {
+  case "$1" in
+    # edits only need acceptEdits; bypassPermissions would also allow shell
+    claude)   claude -p --permission-mode acceptEdits "$agent_prompt" </dev/null ;;
+    # --full-auto was removed from `codex exec`; this is the long form of --yolo
+    # (a sandboxed alternative: `codex exec -s workspace-write`)
+    codex)    codex exec --dangerously-bypass-approvals-and-sandbox "$agent_prompt" </dev/null ;;
+    # --yolo is deprecated in favour of --approval-mode yolo
+    gemini)   gemini --approval-mode yolo -p "$agent_prompt" </dev/null ;;
+    # qwen: -p is deprecated; the positional prompt runs one-shot
+    qwen)     qwen --yolo "$agent_prompt" </dev/null ;;
+    # --allow-all-tools is required for -p (non-interactive) mode
+    copilot)  copilot --allow-all-tools -p "$agent_prompt" </dev/null ;;
+    # `opencode run` auto-denies permission prompts unless --auto is given
+    opencode) opencode run --auto "$agent_prompt" </dev/null ;;
+    # pi has no permission prompts at all
+    pi)       pi -p "$agent_prompt" </dev/null ;;
+    omp)      omp -p --yolo "$agent_prompt" </dev/null ;;
+    # --print implies --afk (auto-approve); --yolo keeps older releases covered
+    kimi)     kimi --print --yolo -p "$agent_prompt" </dev/null ;;
+    goose)    GOOSE_MODE=auto goose run --no-session -t "$agent_prompt" </dev/null ;;
+    # amp never asks for tool approval; -x is execute mode
+    amp)      amp -x "$agent_prompt" </dev/null ;;
+    # --auto high: highest autonomy short of --skip-permissions-unsafe
+    droid)    droid exec --auto high "$agent_prompt" </dev/null ;;
+    # `crush run` auto-approves every permission request (no flag needed)
+    crush)    crush run "$agent_prompt" </dev/null ;;
+    # --force (= --yolo): apply changes instead of only proposing them
+    cursor)   "$(agent_bin cursor)" -p --force "$agent_prompt" </dev/null ;;
+    kiro-cli) kiro-cli chat --no-interactive --trust-all-tools "$agent_prompt" </dev/null ;;
+    aider)    aider --yes-always --no-auto-commits --message "$agent_prompt" </dev/null ;;
+    *)        return 127 ;;
+  esac
+}
+
 say "Looking for agent CLIs that are installed and logged in (warm)…"
-default_cli=""
-if command -v claude >/dev/null 2>&1; then
-  if claude auth status >/dev/null 2>&1; then
-    step "claude — installed, logged in"
-    [[ -z "$default_cli" ]] && default_cli="claude"
-  else
-    warn "claude — installed but not logged in (run 'claude' once to log in)"
-  fi
-fi
-if command -v codex >/dev/null 2>&1; then
-  if codex login status >/dev/null 2>&1; then
-    step "codex — installed, logged in"
-    [[ -z "$default_cli" ]] && default_cli="codex"
-  else
-    warn "codex — installed but not logged in (run 'codex login')"
-  fi
-fi
-if command -v pi >/dev/null 2>&1; then
-  step "pi — installed (uses whichever provider you've configured)"
-  [[ -z "$default_cli" ]] && default_cli="pi"
-fi
-if command -v opencode >/dev/null 2>&1; then
-  step "opencode — installed (login state unknown)"
-  [[ -z "$default_cli" ]] && default_cli="opencode"
-fi
-if command -v kimi >/dev/null 2>&1; then
-  step "kimi — installed (login state unknown)"
-  [[ -z "$default_cli" ]] && default_cli="kimi"
-fi
+default_cli=""; fallback_cli=""; installed_agents=""
+for name in $AGENT_ROSTER; do
+  command -v "$(agent_bin "$name")" >/dev/null 2>&1 || continue
+  installed_agents="$installed_agents $name"
+  agent_status "$name"
+  case "$AGENT_STATE" in
+    warm)    step "$name — installed, $AGENT_NOTE"
+             [[ -z "$default_cli" ]] && default_cli="$name" ;;
+    unknown) step "$name — installed ($AGENT_NOTE)"
+             [[ -z "$fallback_cli" ]] && fallback_cli="$name" ;;
+    cold)    warn "$name — installed but $AGENT_NOTE" ;;
+  esac
+done
+[[ -z "$default_cli" ]] && default_cli="$fallback_cli"
 if [[ -z "$default_cli" ]]; then
-  warn "No warm agent CLI found. The wizard will do the mechanical setup and"
-  warn "leave the README rewrite for you (or an agent) to do later."
+  if [[ -z "$installed_agents" ]]; then
+    warn "No agent CLI found. Supported: $AGENT_ROSTER"
+  else
+    warn "No warm agent CLI found — log in to one of:$installed_agents"
+  fi
+  warn "The wizard will do the mechanical setup and leave the README rewrite"
+  warn "for you (or an agent) to do later."
   default_cli="none"
 fi
 # select_agent — prompt until AGENT_CLI is an installed, driveable CLI or the
@@ -269,17 +381,18 @@ fi
 select_agent() {
   while :; do
     AGENT_CLI=""
-    ask AGENT_CLI "Agent to finish the setup (claude/codex/pi/opencode/kimi/none) [${default_cli}]:"
+    note "supported: $AGENT_ROSTER"
+    ask AGENT_CLI "Agent to finish the setup (name, or none) [${default_cli}]:"
     [[ -z "$AGENT_CLI" ]] && AGENT_CLI="$default_cli"
-    case "$AGENT_CLI" in
-      none) break ;;
-      claude|codex|pi|opencode|kimi)
-        if command -v "$AGENT_CLI" >/dev/null 2>&1; then break; fi
+    if [[ "$AGENT_CLI" == "none" ]]; then break; fi
+    case " $AGENT_ROSTER " in
+      *" $AGENT_CLI "*)
+        if command -v "$(agent_bin "$AGENT_CLI")" >/dev/null 2>&1; then break; fi
         warn "'$AGENT_CLI' is not on PATH — install it, or pick another agent"
         ;;
       *)
-        warn "'$AGENT_CLI' is not an agent this wizard can drive — choose one of:"
-        warn "claude, codex, pi, opencode, kimi, or none"
+        warn "'$AGENT_CLI' is not an agent this wizard can drive — choose one of"
+        warn "the supported names above, or none"
         ;;
     esac
   done
@@ -338,18 +451,6 @@ fi
 # ── Stage 6 ───────────────────────────────────────────────────────────────
 stage "Let the agent finish — rewrite README.md"
 agent_prompt="Read ./.scaffold/AGENT-SETUP.md and complete the agent tasks in it. You are non-interactive: never ask a question, use the documented defaults. End with the checklist report AGENT-SETUP.md asks for."
-
-# run_agent CLI — invoke CLI on $agent_prompt in its documented headless mode.
-run_agent() {
-  case "$1" in
-    claude)   claude -p --permission-mode acceptEdits "$agent_prompt" </dev/null ;;
-    codex)    codex exec --full-auto "$agent_prompt" </dev/null ;;
-    pi)       pi -p "$agent_prompt" </dev/null ;;
-    opencode) opencode run "$agent_prompt" </dev/null ;;
-    kimi)     kimi --print -p "$agent_prompt" </dev/null ;;
-    *)        return 127 ;;
-  esac
-}
 
 # readme_rewritten — the hard completion check from AGENT-SETUP.md: the
 # onboarding README counts as rewritten once it no longer mentions this wizard.
