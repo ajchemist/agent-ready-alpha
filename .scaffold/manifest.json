@@ -1,0 +1,15 @@
+{
+  "generated_at": "2026-09-05T10:58:37Z",
+  "files": {
+    ".gitignore": "sha256:1ab351c812074c55923b12c1c7eab56ca5a83113e35782e537635797c35b93bf",
+    ".scaffold/AGENT-SETUP.md": "sha256:18cf08a92b36a142256050fc3534b019377035a3967d1894670b794f6471e58d",
+    ".scaffold/verify.sh": "sha256:af7369f55ef792e91d7e3d29ccf9ef9f96a2f6acd19fa282f7e6be21014f0930",
+    "AGENTS.md": "sha256:ee8aa87201122bab9b62abde1b5a88d6db0c9ccef6a225a7f956cb07096c2506",
+    "CLAUDE.md": "sha256:336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49",
+    "README.md": "sha256:eb335e1d05cac816456e6c0aeeecd28a0bf61977517bf1061d682fe0260b24d5",
+    "docs/agents/domain.md": "sha256:54c7f5205c805747032855ec71fc97abb5083d7e7d34e915552c5304af90d208",
+    "docs/agents/issue-tracker.md": "sha256:68b1ee76a3ea963c0de508fefeb06505b0cce46024c4c9410cba22ac1f9fd5c4",
+    "docs/agents/triage-labels.md": "sha256:e2f8ce5b8ac6f73443c912adb15bc3a3d684771e816d013463bb5f8d6c73c0cd",
+    "setup-wizard.sh": "sha256:fd908bf0b21dc2b02d394896e29dc396a8ffde7b262e3f1ca3b48cd3837cce7b"
+  }
+}
